@@ -63,30 +63,46 @@ export class OfficeScene extends Phaser.Scene {
     const W = this.scale.width
     const H = this.scale.height
     const cx = W / 2
-    const cy = H / 2
+    const B = 32 // border thickness
 
-    // Dark fallback background (always visible)
-    this.add.rectangle(cx, cy, W, H, 0x2c1f14).setDepth(0)
+    // Wood floor — alternating planks
+    const floor = this.add.graphics().setDepth(0)
+    const plankH = 32
+    for (let y = B; y < H - B; y += plankH) {
+      const even = Math.floor((y - B) / plankH) % 2 === 0
+      floor.fillStyle(even ? 0x7a5c3a : 0x6b4e2e, 1)
+      floor.fillRect(B, y, W - B * 2, Math.min(plankH, H - B - y))
+    }
+    // Subtle plank lines
+    floor.lineStyle(1, 0x5a3d21, 0.4)
+    for (let y = B + plankH; y < H - B; y += plankH) {
+      floor.lineBetween(B, y, W - B, y)
+    }
 
-    // Floor: tileSprite tiles frame 34 (row 2, col 0 in 17-wide sheet = wood floor)
-    // Adjust FLOOR_FRAME if wrong tile shows up
-    const FLOOR_FRAME = 34
-    this.add.tileSprite(cx, cy, W - 64, H - 64, 'tileset-room', FLOOR_FRAME)
-      .setDepth(1)
+    // Walls
+    const walls = this.add.graphics().setDepth(1)
+    walls.fillStyle(0x4a3520, 1)
+    walls.fillRect(0, 0, W, B)              // top
+    walls.fillRect(0, H - B, W, B)         // bottom
+    walls.fillRect(0, 0, B, H)             // left
+    walls.fillRect(W - B, 0, B, H)         // right
 
-    // Walls: tileSprite along each edge (frame 0 = top-left tile = outer wall piece)
-    const WALL_FRAME = 0
-    const WS = 32 // wall thickness
-    this.add.tileSprite(cx, WS / 2,     W, WS, 'tileset-room', WALL_FRAME).setDepth(2) // top
-    this.add.tileSprite(cx, H - WS / 2, W, WS, 'tileset-room', WALL_FRAME).setDepth(2) // bottom
-    this.add.tileSprite(WS / 2,     cy, WS, H, 'tileset-room', WALL_FRAME).setDepth(2) // left
-    this.add.tileSprite(W - WS / 2, cy, WS, H, 'tileset-room', WALL_FRAME).setDepth(2) // right
+    // Wall top highlight strip
+    walls.fillStyle(0x8b6845, 1)
+    walls.fillRect(B, B - 4, W - B * 2, 4)
+
+    // Corner accents
+    walls.fillStyle(0x3a2810, 1)
+    walls.fillRect(0, 0, B, B)
+    walls.fillRect(W - B, 0, B, B)
+    walls.fillRect(0, H - B, B, B)
+    walls.fillRect(W - B, H - B, B, B)
 
     // Title bar
-    this.add.rectangle(cx, 16, W, 32, 0x0a0a1a, 0.88).setDepth(3)
+    this.add.rectangle(cx, 16, W, 32, 0x0a0a1a, 0.88).setDepth(2)
     this.add.text(cx, 16, '🏢 PIXEL OFFICE', {
       fontSize: '11px', color: '#a78bfa', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(4)
+    }).setOrigin(0.5).setDepth(3)
   }
 
   private createFurniture() {
@@ -95,12 +111,12 @@ export class OfficeScene extends Phaser.Scene {
     const scaleX = W / 640
     const scaleY = H / 480
 
-    // Interiors_free_32x32.png is 16 tiles wide
-    // frame = row * 16 + col
-    // Adjust DESK_* and CHAIR_* frame numbers to match actual tileset content
-    const DESK_L  = 64  // row 4, col 0  — left half of desk
-    const DESK_R  = 65  // row 4, col 1  — right half of desk
-    const CHAIR   = 80  // row 5, col 0  — chair
+    // Interiors_free_32x32.png — 16 tiles wide, frame = row*16 + col
+    // These are starting guesses — tell me which frames look wrong to adjust
+    const DESK_L = 128   // row 8, col 0
+    const DESK_R = 129   // row 8, col 1
+    const DESK_M = 130   // row 8, col 2
+    const CHAIR  = 144   // row 9, col 0
 
     const positions = [
       { x: 320, y: 130 }, // ฟ้า
@@ -113,11 +129,12 @@ export class OfficeScene extends Phaser.Scene {
       const dx = Math.round(pos.x * scaleX)
       const dy = Math.round(pos.y * scaleY)
 
-      // Desk: 2 tiles wide
-      this.add.image(dx - 16, dy, 'tileset-interior', DESK_L).setDepth(3)
-      this.add.image(dx + 16, dy, 'tileset-interior', DESK_R).setDepth(3)
-      // Chair below desk
-      this.add.image(dx, dy + 32, 'tileset-interior', CHAIR).setDepth(3)
+      // Desk: 3 tiles wide, centered on agent position
+      this.add.image(dx - 32, dy, 'tileset-interior', DESK_L).setDepth(3)
+      this.add.image(dx,      dy, 'tileset-interior', DESK_M).setDepth(3)
+      this.add.image(dx + 32, dy, 'tileset-interior', DESK_R).setDepth(3)
+      // Chair below
+      this.add.image(dx, dy + 36, 'tileset-interior', CHAIR).setDepth(3)
     })
   }
 
