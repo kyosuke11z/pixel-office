@@ -78,5 +78,5 @@ export async function devProcess(taskMessage: string): Promise<AgentResponse> {
     history.push({ role: 'user', content: `Tool result:\n${toolResult}` })
   }
 
-  return { content: 'หมด iteration ของ tool calls แล้ว', next: null, done: true }
+  return { content: 'หมด iteration ของ tool calls แล้ว', done: true }
 }
