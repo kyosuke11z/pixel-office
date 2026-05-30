@@ -41,6 +41,7 @@ export type WsEventType =
   | 'secretary_reply'
   | 'user_checkpoint'
   | 'pipeline_resumed'
+  | 'pipeline_cancelled'
   | 'error'
 
 export interface WsEvent {
