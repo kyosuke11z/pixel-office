@@ -3,6 +3,9 @@ import express from 'express'
 import cors from 'cors'
 import { WebSocketServer } from 'ws'
 import http from 'http'
+import { readdirSync, existsSync } from 'node:fs'
+import { resolve, join, dirname } from 'node:path'
+import { homedir } from 'node:os'
 import { handleUserMessage } from './orchestrator.js'
 import { setProjectRoot, getProjectRoot } from './project.js'
 import { createSession, listSessions, getSession, appendMessage } from './sessions.js'
@@ -13,6 +16,25 @@ app.use(express.json())
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true })
+})
+
+// Directory browser
+app.get('/api/browse', (req, res) => {
+  const raw = (req.query.path as string) || homedir()
+  const abs = resolve(raw)
+  if (!existsSync(abs)) {
+    res.status(400).json({ error: 'ไม่พบ path นี้' })
+    return
+  }
+  try {
+    const entries = readdirSync(abs, { withFileTypes: true })
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+      .map(e => ({ name: e.name, path: join(abs, e.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    res.json({ path: abs, parent: dirname(abs) !== abs ? dirname(abs) : null, entries })
+  } catch {
+    res.status(403).json({ error: 'ไม่มีสิทธิ์อ่าน directory นี้' })
+  }
 })
 
 // Project directory
