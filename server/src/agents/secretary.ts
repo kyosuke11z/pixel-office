@@ -1,4 +1,4 @@
-import { chat, chatJSON, type ChatMessage } from '../llm.js'
+import { chat, chatJSON } from '../llm.js'
 import { characterPrompt } from './characters.js'
 import type { AgentDecision } from './types.js'
 
@@ -25,21 +25,15 @@ const DECIDE_SYSTEM = `${BASE}
   "replyContent": "ข้อความตอบ user (กรณี action=reply_user)"
 }`
 
-const history: ChatMessage[] = []
-
 export async function secretaryDecide(userMessage: string): Promise<AgentDecision> {
-  history.push({ role: 'user', content: userMessage })
-  const decision = await chatJSON<AgentDecision>(DECIDE_SYSTEM, history)
-  return decision
+  return chatJSON<AgentDecision>(DECIDE_SYSTEM, [{ role: 'user', content: userMessage }])
 }
 
 export async function secretarySummarize(originalRequest: string, teamResults: string): Promise<string> {
-  const reply = await chat(BASE, [
+  return chat(BASE, [
     {
       role: 'user',
       content: `หัวหน้าขอว่า: "${originalRequest}"\n\nผลงานจากทีม:\n${teamResults}\n\nสรุปให้หัวหน้าฟังเป็นภาษาที่เข้าใจง่าย กระชับ ตรงประเด็น`,
     },
   ])
-  history.push({ role: 'assistant', content: reply })
-  return reply
 }
