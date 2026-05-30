@@ -3,6 +3,8 @@ import ChatPanel from './components/ChatPanel'
 import { ProjectPicker } from './components/ProjectPicker'
 import { SessionSidebar } from './components/SessionSidebar'
 import { FileViewer } from './components/FileViewer'
+import { AgentDock } from './components/AgentDock'
+import { useAgentStates } from './hooks/useAgentStates'
 import { useSocket } from './ws/useSocket'
 import { startGame, getScene } from './game/config'
 
@@ -37,6 +39,7 @@ export default function App() {
   const [showFiles, setShowFiles] = useState(false)
 
   const { send, lastEvent } = useSocket('ws://localhost:3001/ws')
+  const { agentStates, handleAgentEvent } = useAgentStates()
 
   useEffect(() => {
     if (!gameRef.current) return
@@ -80,7 +83,8 @@ export default function App() {
     }
 
     getScene()?.handleEvent(lastEvent)
-  }, [lastEvent])
+    handleAgentEvent(lastEvent)
+  }, [lastEvent, handleAgentEvent])
 
   const handleSend = (text: string) => {
     setMessages(prev => [...prev, { id: Date.now(), from: 'คุณ', content: text, isUser: true }])
@@ -129,21 +133,24 @@ export default function App() {
         onDeleteSession={handleNewSession}
       />
 
-      {/* Canvas + file viewer button */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        <div ref={gameRef} style={{ width: '100%', height: '100%', background: '#0f0f1e' }} />
-        <button
-          onClick={() => setShowFiles(true)}
-          title="ดู project files"
-          style={{
-            position: 'absolute', bottom: 12, right: 12,
-            background: '#1e293b', border: '1px solid #334155',
-            color: '#94a3b8', borderRadius: 8, padding: '6px 12px',
-            cursor: 'pointer', fontSize: 11,
-          }}
-        >
-          📁 Files
-        </button>
+      {/* Canvas + AgentDock */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          <div ref={gameRef} style={{ position: 'absolute', inset: 0, background: '#0f0f1e' }} />
+          <button
+            onClick={() => setShowFiles(true)}
+            title="ดู project files"
+            style={{
+              position: 'absolute', bottom: 12, right: 12,
+              background: '#1e293b', border: '1px solid #334155',
+              color: '#94a3b8', borderRadius: 8, padding: '6px 12px',
+              cursor: 'pointer', fontSize: 11,
+            }}
+          >
+            📁 Files
+          </button>
+        </div>
+        <AgentDock agentStates={agentStates} />
       </div>
 
       {/* Right panel */}

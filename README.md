@@ -1,6 +1,6 @@
 # Pixel Office — Multi-Agent AI Simulation
 
-![Pixel Office Demo](demo.gif)
+![Pixel Office Screenshot](screenshot.png)
 
 จำลองออฟฟิศ pixel art (top-down view) ที่ AI agent **7 ตัว** ทำงานร่วมกัน  
 คุยกับเลขา **ฟ้า** ด้วยภาษาธรรมดา — เธอแปลเป็น spec แล้ว orchestrate ทีมเอง  
