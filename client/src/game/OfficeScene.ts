@@ -199,9 +199,10 @@ export class OfficeScene extends Phaser.Scene {
         const toAgent = this.agents.get(event.to ?? '')
         if (fromAgent && toAgent) {
           this.bubble.hide()
+          const fromName = fromAgent.config.name
           fromAgent.moveTo(toAgent.homeX - 36, toAgent.homeY, () => {
-            this.bubble.show(toAgent.homeX, toAgent.homeY - 20, '📨 ส่งงานแล้ว')
-            this.time.delayedCall(1500, () => {
+            this.bubble.show(toAgent.homeX, toAgent.homeY - 20, `📨 ${fromName} ส่งงานมา`)
+            this.time.delayedCall(1200, () => {
               fromAgent.returnHome()
               this.bubble.hide()
             })
@@ -210,19 +211,38 @@ export class OfficeScene extends Phaser.Scene {
         break
       }
       case 'agent_message': {
+        const fromAgent = this.agents.get(event.from ?? '')
         const toAgent = this.agents.get(event.to ?? '')
-        if (toAgent && event.content) {
-          this.bubble.show(toAgent.homeX, toAgent.homeY - 20, event.content.slice(0, 60))
-          this.time.delayedCall(3000, () => this.bubble.hide())
+        if (fromAgent && event.content) {
+          // แสดง excerpt จริงของงานที่ส่ง
+          const excerpt = event.content.replace(/#+\s*/g, '').replace(/\*+/g, '').trim().slice(0, 55)
+          const target = toAgent ?? fromAgent
+          this.bubble.show(target.homeX, target.homeY - 20, excerpt + (event.content.length > 55 ? '…' : ''))
+          this.time.delayedCall(3500, () => this.bubble.hide())
+        }
+        break
+      }
+      case 'agent_status': {
+        const agent = this.agents.get(event.agent ?? '')
+        if (agent && event.content && !event.content.includes('เสร็จแล้ว')) {
+          agent.flash()
         }
         break
       }
       case 'user_checkpoint': {
-        // ฟ้า flash + bubble checkpoint
         const secretary = this.agents.get('secretary')
         if (secretary) {
           secretary.flash()
-          this.bubble.show(secretary.homeX, secretary.homeY - 20, '🔔 รอ approval จากหัวหน้า')
+          this.bubble.show(secretary.homeX, secretary.homeY - 20, '🔔 รอ approval คุณหัวหน้า')
+        }
+        break
+      }
+      case 'pipeline_cancelled': {
+        this.bubble.hide()
+        const secretary = this.agents.get('secretary')
+        if (secretary) {
+          this.bubble.show(secretary.homeX, secretary.homeY - 20, '⛔ ยกเลิกแล้วค่ะ')
+          this.time.delayedCall(2000, () => this.bubble.hide())
         }
         break
       }
@@ -233,8 +253,8 @@ export class OfficeScene extends Phaser.Scene {
       case 'secretary_reply': {
         const secretary = this.agents.get('secretary')
         if (secretary) {
-          this.bubble.show(secretary.homeX, secretary.homeY - 20, '✅ เสร็จแล้วค่ะ!')
-          this.time.delayedCall(2500, () => this.bubble.hide())
+          this.bubble.show(secretary.homeX, secretary.homeY - 20, '✅ สรุปให้หัวหน้าแล้วค่ะ')
+          this.time.delayedCall(3000, () => this.bubble.hide())
         }
         break
       }
