@@ -6,7 +6,7 @@ import http from 'http'
 import { readdirSync, existsSync } from 'node:fs'
 import { resolve, join, dirname } from 'node:path'
 import { homedir } from 'node:os'
-import { handleUserMessage } from './orchestrator.js'
+import { handleUserMessage, resolveCheckpoint } from './orchestrator.js'
 import { setProjectRoot, getProjectRoot } from './project.js'
 import { createSession, listSessions, getSession, appendMessage } from './sessions.js'
 
@@ -90,6 +90,9 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', content: 'Invalid message format' }))
         return
       }
+
+      // ถ้ามี checkpoint รอคำตอบ — route ไปที่นั้นก่อน
+      if (resolveCheckpoint(ws, content)) return
 
       // ตั้ง session
       if (sessionId && getSession(sessionId)) {

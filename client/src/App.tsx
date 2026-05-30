@@ -28,9 +28,10 @@ interface SessionData {
 export default function App() {
   const gameRef = useRef<HTMLDivElement>(null)
   const [messages, setMessages] = useState<Message[]>([
-    { id: 0, from: 'ฟ้า', content: 'สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ?' },
+    { id: 0, from: 'ฟ้า', content: 'สวัสดีค่ะ — ทีมพร้อมแล้วค่ะ มีอะไรให้จัดการไหม?' },
   ])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [pendingCheckpoint, setPendingCheckpoint] = useState(false)
 
   const { send, lastEvent } = useSocket('ws://localhost:3001/ws')
 
@@ -42,24 +43,35 @@ export default function App() {
 
   useEffect(() => {
     if (!lastEvent) return
+
     if (lastEvent.type === 'secretary_reply') {
       setMessages(prev => [...prev, {
         id: Date.now(),
         from: 'ฟ้า',
         content: lastEvent.content ?? '',
       }])
+      setPendingCheckpoint(false)
     }
-    // รับ session_created จาก server
-    if ((lastEvent as unknown as { type: string; sessionId?: string }).type === 'session_created') {
-      const sid = (lastEvent as unknown as { type: string; sessionId?: string }).sessionId
-      if (sid) setCurrentSessionId(sid)
-    }
-  }, [lastEvent])
 
-  useEffect(() => {
-    if (!lastEvent) return
-    const scene = getScene()
-    scene?.handleEvent(lastEvent)
+    if (lastEvent.type === 'user_checkpoint') {
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        from: 'ฟ้า',
+        content: lastEvent.content ?? '',
+      }])
+      setPendingCheckpoint(true)
+    }
+
+    if (lastEvent.type === 'pipeline_resumed') {
+      setPendingCheckpoint(false)
+    }
+
+    const evtWithSession = lastEvent as unknown as { type: string; sessionId?: string }
+    if (evtWithSession.type === 'session_created' && evtWithSession.sessionId) {
+      setCurrentSessionId(evtWithSession.sessionId)
+    }
+
+    getScene()?.handleEvent(lastEvent)
   }, [lastEvent])
 
   const handleSend = (text: string) => {
@@ -77,8 +89,9 @@ export default function App() {
       const res = await fetch(`/api/sessions/${id}`)
       const session = await res.json() as SessionData
       setCurrentSessionId(id)
+      setPendingCheckpoint(false)
       setMessages([
-        { id: 0, from: 'ฟ้า', content: 'สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ?' },
+        { id: 0, from: 'ฟ้า', content: 'สวัสดีค่ะ — ทีมพร้อมแล้วค่ะ มีอะไรให้จัดการไหม?' },
         ...session.messages
           .filter(m => m.role === 'user' || m.role === 'assistant')
           .map((m, i) => ({
@@ -93,7 +106,8 @@ export default function App() {
 
   const handleNewSession = () => {
     setCurrentSessionId(null)
-    setMessages([{ id: 0, from: 'ฟ้า', content: 'สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ?' }])
+    setPendingCheckpoint(false)
+    setMessages([{ id: 0, from: 'ฟ้า', content: 'สวัสดีค่ะ — ทีมพร้อมแล้วค่ะ มีอะไรให้จัดการไหม?' }])
   }
 
   return (
@@ -106,7 +120,12 @@ export default function App() {
       <div ref={gameRef} style={{ flex: 1, background: '#0f0f1e' }} />
       <div style={{ width: 360, display: 'flex', flexDirection: 'column' }}>
         <ProjectPicker onProjectSet={(p) => console.log('project set:', p)} />
-        <ChatPanel messages={messages} onSend={handleSend} lastEvent={lastEvent} />
+        <ChatPanel
+          messages={messages}
+          onSend={handleSend}
+          lastEvent={lastEvent}
+          pendingCheckpoint={pendingCheckpoint}
+        />
       </div>
     </div>
   )

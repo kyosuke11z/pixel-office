@@ -1,5 +1,11 @@
-// server/src/agents/types.ts
-export type AgentId = 'secretary' | 'dev' | 'qa' | 'tester'
+export type AgentId =
+  | 'secretary'
+  | 'pm'
+  | 'techlead'
+  | 'designer'
+  | 'dev'
+  | 'qa'
+  | 'tester'
 
 export interface AgentMessage {
   from: AgentId | 'user'
@@ -32,12 +38,15 @@ export type WsEventType =
   | 'agent_move'
   | 'agent_message'
   | 'secretary_reply'
+  | 'user_checkpoint'
+  | 'pipeline_resumed'
   | 'error'
 
 export interface WsEvent {
-  type: WsEventType
+  type: WsEventType | string
   agent?: AgentId
   from?: AgentId | 'user'
   to?: AgentId | 'user'
   content?: string
+  sessionId?: string
 }
