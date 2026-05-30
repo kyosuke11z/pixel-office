@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel'
 import { useSocket } from './ws/useSocket'
+import { startGame, getScene } from './game/config'
 
 export type Message = {
   id: number
@@ -18,6 +19,12 @@ export default function App() {
   const { send, lastEvent } = useSocket('ws://localhost:3001/ws')
 
   useEffect(() => {
+    if (!gameRef.current) return
+    const game = startGame(gameRef.current)
+    return () => { game.destroy(true) }
+  }, [])
+
+  useEffect(() => {
     if (!lastEvent) return
     if (lastEvent.type === 'secretary_reply') {
       setMessages(prev => [...prev, {
@@ -26,6 +33,12 @@ export default function App() {
         content: lastEvent.content ?? '',
       }])
     }
+  }, [lastEvent])
+
+  useEffect(() => {
+    if (!lastEvent) return
+    const scene = getScene()
+    scene?.handleEvent(lastEvent)
   }, [lastEvent])
 
   const handleSend = (text: string) => {
