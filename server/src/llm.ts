@@ -36,15 +36,14 @@ async function chatWithRetry(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      emitStatus(attempt === 0 ? 'กำลังคิด...' : `retry ครั้งที่ ${attempt} — กำลังคิด...`)
+      emitStatus(attempt === 0 ? 'กำลังนึกอยู่...' : 'ขอคิดใหม่อีกทีนะ...')
       const response = await client.chat.completions.create({ model, messages })
       const content = response.choices[0]?.message.content
       if (!content) {
-        emitStatus('ได้รับ response ว่างเปล่า รอ 5s แล้วลองใหม่...')
+        emitStatus('เอ๋ ยังไม่ได้คำตอบ รอแป๊บนึง...')
         await sleep(5_000)
         continue
       }
-      emitStatus('ได้คำตอบแล้ว ✓')
       return content
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -54,8 +53,8 @@ async function chatWithRetry(
       if ((is429 || is5xx) && attempt < maxRetries) {
         const waitSec = Math.round(delay / 1000)
         emitStatus(is429
-          ? `โดน rate limit — รอ ${waitSec}s แล้ว retry...`
-          : `server error — รอ ${waitSec}s แล้ว retry...`
+          ? `งานเข้ามาเยอะหน่อย ขอพักซักครู่ (~${waitSec}s)...`
+          : `มีปัญหานิดหน่อย ลองใหม่อีกทีนะ...`
         )
         await sleep(delay)
         delay = Math.min(delay * 1.5, 120_000)
