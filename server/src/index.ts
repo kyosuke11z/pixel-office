@@ -8,6 +8,8 @@ import { resolve, join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { handleUserMessage, resolveCheckpoint } from './orchestrator.js'
 import { setProjectRoot, getProjectRoot } from './project.js'
+import { listProviders, addProvider, activateProvider, deleteProvider, updateProvider } from './providers.js'
+import { testProvider } from './llm.js'
 import { createSession, listSessions, getSession, appendMessage, deleteSession } from './sessions.js'
 
 const app = express()
@@ -16,6 +18,42 @@ app.use(express.json())
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true })
+})
+
+// LLM Providers
+app.get('/api/providers', (_req, res) => res.json(listProviders()))
+
+app.post('/api/providers', (req, res) => {
+  const { name, baseURL, apiKey, model } = req.body as Record<string, string>
+  if (!name || !baseURL || !apiKey || !model) { res.status(400).json({ error: 'ข้อมูลไม่ครบ' }); return }
+  res.json(addProvider({ name, baseURL, apiKey, model }))
+})
+
+app.put('/api/providers/:id', (req, res) => {
+  const p = updateProvider(req.params.id, req.body)
+  if (!p) { res.status(404).json({ error: 'ไม่พบ provider' }); return }
+  res.json(p)
+})
+
+app.put('/api/providers/:id/activate', (req, res) => {
+  const p = activateProvider(req.params.id)
+  if (!p) { res.status(404).json({ error: 'ไม่พบ provider' }); return }
+  res.json(p)
+})
+
+app.delete('/api/providers/:id', (req, res) => {
+  if (!deleteProvider(req.params.id)) { res.status(404).json({ error: 'ไม่พบ provider' }); return }
+  res.json({ ok: true })
+})
+
+app.post('/api/providers/test', async (req, res) => {
+  const { baseURL, apiKey, model } = req.body as Record<string, string>
+  try {
+    const result = await testProvider(baseURL, apiKey, model)
+    res.json({ ok: true, response: result })
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e instanceof Error ? e.message : String(e) })
+  }
 })
 
 // Directory browser

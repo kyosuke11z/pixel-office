@@ -77,14 +77,5 @@ export const CHARACTERS: Record<string, Character> = {
 export function characterPrompt(id: string): string {
   const c = CHARACTERS[id]
   if (!c) return ''
-  return `
-## ตัวตนของคุณ
-- ชื่อ: ${c.name}
-- เพศ: ${c.gender === 'female' ? 'หญิง' : 'ชาย'}
-- บทบาท: ${c.role}
-- นิสัย: ${c.personality}
-- สไตล์การพูด: ${c.speakingStyle}
-- จุดเด่น: ${c.quirk}
-
-พูดให้สอดคล้องกับตัวตนข้างบนเสมอ แต่อย่าพูดถึงตัวตนของตัวเองโดยตรง`
+  return `[นิสัย: ${c.personality} | พูดแบบ: ${c.speakingStyle}]`
 }
