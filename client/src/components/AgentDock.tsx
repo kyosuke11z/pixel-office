@@ -91,18 +91,23 @@ function AgentCard({ state, onClick, isSelected }: {
   )
 }
 
-function AgentDetail({ state, onClose }: { state: AgentState; onClose: () => void }) {
+function AgentDetail({ state, onClose, align }: { state: AgentState; onClose: () => void; align: 'left' | 'center' | 'right' }) {
   const meta = AGENT_META[state.id] ?? { color: '#64748b', role: '', emoji: '🤖' }
+
+  const posStyle: React.CSSProperties = align === 'left'
+    ? { left: 0, transform: 'none' }
+    : align === 'right'
+    ? { right: 0, transform: 'none' }
+    : { left: '50%', transform: 'translateX(-50%)' }
 
   return (
     <div style={{
-      position: 'absolute', bottom: '100%', left: '50%',
-      transform: 'translateX(-50%)',
+      position: 'absolute', bottom: '100%', ...posStyle,
       background: '#0f172a', border: `1px solid ${meta.color}`,
       borderRadius: 12, padding: '12px 14px', zIndex: 100,
       minWidth: 260, maxWidth: 320,
       boxShadow: `0 -8px 32px ${meta.color}30`,
-      animation: 'slideUp 0.2s ease-out',
+      animation: `${align === 'center' ? 'slideUpCenter' : 'slideUpEdge'} 0.2s ease-out`,
     }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -184,9 +189,13 @@ export function AgentDock({ agentStates }: Props) {
           0%, 100% { transform: scale(1); opacity: 0.4; }
           50% { transform: scale(1.15); opacity: 0.7; }
         }
-        @keyframes slideUp {
+        @keyframes slideUpCenter {
           from { opacity: 0; transform: translateX(-50%) translateY(8px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @keyframes slideUpEdge {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
 
@@ -196,15 +205,18 @@ export function AgentDock({ agentStates }: Props) {
         background: '#070b14', borderTop: '1px solid #1e293b',
         position: 'relative',
       }}>
-        {AGENT_ORDER.map(id => {
+        {AGENT_ORDER.map((id, idx) => {
           const state = agentStates[id]
           if (!state) return null
+          const total = AGENT_ORDER.length
+          const align = idx <= 1 ? 'left' : idx >= total - 2 ? 'right' : 'center'
           return (
             <div key={id} style={{ position: 'relative' }}>
               {selectedId === id && (
                 <AgentDetail
                   state={state}
                   onClose={() => setSelectedId(null)}
+                  align={align}
                 />
               )}
               <AgentCard
