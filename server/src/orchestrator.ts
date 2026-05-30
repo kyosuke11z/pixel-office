@@ -85,10 +85,9 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
   move(ws, 'pm', 'techlead')
   thinking(ws, 'techlead', 'designer') // ทั้งสองทำงานพร้อมกัน
 
-  const [tlResult, dsResult] = await Promise.all([
-    techLeadProcess(`Requirements:\n${results.pm}\n\nTask: ${refinedTask}`),
-    designerProcess(`Requirements:\n${results.pm}\n\nTask: ${refinedTask}`),
-  ])
+  // emit thinking พร้อมกันก่อน แต่รัน sequential เพื่อหลีกเลี่ยง rate limit
+  const tlResult = await techLeadProcess(`Requirements:\n${results.pm}\n\nTask: ${refinedTask}`)
+  const dsResult = await designerProcess(`Requirements:\n${results.pm}\n\nTask: ${refinedTask}`)
   results.techlead = tlResult.content
   results.designer = dsResult.content
   message(ws, 'techlead', 'dev', tlResult.content)
@@ -134,10 +133,8 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
   move(ws, 'dev', 'qa')
   thinking(ws, 'qa', 'tester') // ทั้งสองทำงานพร้อมกัน
 
-  const [qaResult, testerResult] = await Promise.all([
-    qaProcess(`Code/Plan จาก Dev:\n${results.dev}\n\nOriginal requirements:\n${results.pm}`),
-    testerProcess(`Code/Plan จาก Dev:\n${results.dev}\n\nOriginal requirements:\n${results.pm}`),
-  ])
+  const qaResult = await qaProcess(`Code/Plan จาก Dev:\n${results.dev}\n\nOriginal requirements:\n${results.pm}`)
+  const testerResult = await testerProcess(`Code/Plan จาก Dev:\n${results.dev}\n\nOriginal requirements:\n${results.pm}`)
   results.qa = qaResult.content
   results.tester = testerResult.content
   message(ws, 'qa', 'secretary', qaResult.content)
