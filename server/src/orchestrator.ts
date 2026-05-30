@@ -9,6 +9,11 @@ import { devProcess } from './agents/dev.js'
 import { qaProcess } from './agents/qa.js'
 import { testerProcess } from './agents/tester.js'
 import { isDemoMode, MOCK_RESPONSES } from './demo.js'
+import {
+  AGENT_SLEEP_MS,
+  DEMO_SLEEP_MS,
+  AGENT_MESSAGE_PREVIEW_LEN,
+} from './constants.js'
 
 // ─── Cancel Pipeline ──────────────────────────────────────────────────────────
 
@@ -18,7 +23,6 @@ const cancelledConnections = new WeakSet<WebSocket>()
 
 export function cancelPipeline(ws: WebSocket) {
   cancelledConnections.add(ws)
-  // ปลด checkpoint ถ้ากำลังรออยู่
   const resolver = checkpointResolvers.get(ws)
   if (resolver) { checkpointResolvers.delete(ws); resolver('__cancelled__') }
 }
@@ -30,7 +34,6 @@ function checkCancelled(ws: WebSocket) {
   }
 }
 
-// Checkpoint resolver — per WS connection (keyed by original ws)
 const checkpointResolvers: Map<WebSocket, (answer: string) => void> = new Map()
 
 export function resolveCheckpoint(ws: WebSocket, answer: string): boolean {
@@ -41,7 +44,6 @@ export function resolveCheckpoint(ws: WebSocket, answer: string): boolean {
   return true
 }
 
-// Reply hook — auto-save secretary_reply to session without patchedWs
 const replyHooks: Map<WebSocket, (content: string) => void> = new Map()
 export function registerReplyHook(ws: WebSocket, fn: (content: string) => void) { replyHooks.set(ws, fn) }
 export function unregisterReplyHook(ws: WebSocket) { replyHooks.delete(ws) }
@@ -55,19 +57,9 @@ function emit(ws: WebSocket, event: WsEvent) {
   }
 }
 
-// Pause pipeline — ask user, wait for reply
-async function checkpoint(
-  ws: WebSocket,
-  summary: string,
-  question: string
-): Promise<string> {
-  emit(ws, {
-    type: 'user_checkpoint',
-    content: `${summary}\n\n---\n${question}`,
-  })
-  return new Promise(resolve => {
-    checkpointResolvers.set(ws, resolve)
-  })
+async function checkpoint(ws: WebSocket, summary: string, question: string): Promise<string> {
+  emit(ws, { type: 'user_checkpoint', content: `${summary}\n\n---\n${question}` })
+  return new Promise(resolve => { checkpointResolvers.set(ws, resolve) })
 }
 
 function thinking(ws: WebSocket, ...agents: AgentId[]) {
@@ -77,13 +69,13 @@ function thinking(ws: WebSocket, ...agents: AgentId[]) {
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 async function withStatus(ws: WebSocket, agentId: AgentId, fn: () => Promise<unknown>) {
-  checkCancelled(ws) // check ก่อนเริ่ม
+  checkCancelled(ws)
   setStatusEmitter((msg) => emit(ws, { type: 'agent_status', agent: agentId, content: msg }))
 
   let result: unknown
   if (isDemoMode()) {
     emit(ws, { type: 'agent_status', agent: agentId, content: 'กำลังทำงาน...' })
-    await sleep(1200 + Math.random() * 800)
+    await sleep(DEMO_SLEEP_MS + Math.random() * 300)
     const mock = MOCK_RESPONSES[agentId]
     result = mock !== undefined ? mock : await fn()
   } else {
@@ -91,14 +83,14 @@ async function withStatus(ws: WebSocket, agentId: AgentId, fn: () => Promise<unk
   }
 
   setStatusEmitter(null)
-  checkCancelled(ws) // check หลังเสร็จ
+  checkCancelled(ws)
   emit(ws, { type: 'agent_status', agent: agentId, content: 'เสร็จแล้ว ส่งต่อ...' })
-  await sleep(isDemoMode() ? 500 : 8_000)
+  await sleep(AGENT_SLEEP_MS)
   return result
 }
 
 function message(ws: WebSocket, from: AgentId, to: AgentId | 'user', content: string) {
-  emit(ws, { type: 'agent_message', from, to, content: content.slice(0, 200) })
+  emit(ws, { type: 'agent_message', from, to, content: content.slice(0, AGENT_MESSAGE_PREVIEW_LEN) })
 }
 
 function move(ws: WebSocket, from: AgentId, to: AgentId) {
@@ -107,17 +99,9 @@ function move(ws: WebSocket, from: AgentId, to: AgentId) {
 
 export async function handleUserMessage(userMessage: string, ws: WebSocket) {
   try {
-    // ฟ้า ตัดสินใจ: คุยเล่น หรือ งานจริง
     thinking(ws, 'secretary')
 
-    let decision: Awaited<ReturnType<typeof secretaryDecide>>
-    if (isDemoMode()) {
-      emit(ws, { type: 'agent_status', agent: 'secretary', content: 'กำลังทำงาน...' })
-      await sleep(1000)
-      decision = MOCK_RESPONSES['secretary_decide'] as typeof decision
-    } else {
-      decision = await withStatus(ws, 'secretary', () => secretaryDecide(userMessage)) as typeof decision
-    }
+    const decision = await withStatus(ws, 'secretary', () => secretaryDecide(userMessage)) as Awaited<ReturnType<typeof secretaryDecide>>
 
     if (decision.action === 'reply_user') {
       emit(ws, { type: 'secretary_reply', content: decision.replyContent })
@@ -127,14 +111,13 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
     const originalTask = decision.taskMessage ?? userMessage
     const results: Record<string, string> = {}
 
-    // ─── Stage 1: PM วิเคราะห์ requirement ───────────────────────────────────
+    // ─── Stage 1: PM ──────────────────────────────────────────────────────────
     move(ws, 'secretary', 'pm')
     thinking(ws, 'pm')
     const pmResult = await withStatus(ws, 'pm', () => pmProcess(originalTask)) as Awaited<ReturnType<typeof pmProcess>>
     results.pm = pmResult.content
     message(ws, 'pm', 'secretary', pmResult.content)
 
-    // 🔔 Checkpoint 1 — user approve requirements?
     const ck1 = await checkpoint(
       ws,
       `**อิง (PM) วิเคราะห์ requirement เสร็จแล้ว:**\n\n${pmResult.content}`,
@@ -144,11 +127,10 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
     const refinedTask = isApproval(ck1) ? originalTask : `${originalTask}\n\nหัวหน้าแก้ไข: ${ck1}`
     emit(ws, { type: 'pipeline_resumed', content: 'รับทราบค่ะ ดำเนินการต่อเลย' })
 
-    // ─── Stage 2: Tech Lead + Designer (parallel) ─────────────────────────────
+    // ─── Stage 2: Tech Lead + Designer ────────────────────────────────────────
     move(ws, 'pm', 'techlead')
-    thinking(ws, 'techlead', 'designer') // ทั้งสองทำงานพร้อมกัน
+    thinking(ws, 'techlead', 'designer')
 
-    // emit thinking พร้อมกันก่อน แต่รัน sequential เพื่อหลีกเลี่ยง rate limit
     const ctx = `Requirements:\n${results.pm}\n\nTask: ${refinedTask}`
     const tlResult = await withStatus(ws, 'techlead', () => techLeadProcess(ctx)) as Awaited<ReturnType<typeof techLeadProcess>>
     const dsResult = await withStatus(ws, 'designer', () => designerProcess(ctx)) as Awaited<ReturnType<typeof designerProcess>>
@@ -157,7 +139,6 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
     message(ws, 'techlead', 'dev', tlResult.content)
     message(ws, 'designer', 'dev', dsResult.content)
 
-    // 🔔 Checkpoint 2 — user approve architecture + design?
     const preview2 = [
       `**ต้น (Tech Lead):** ${tlResult.content.slice(0, 300)}...`,
       `**แนน (Designer):** ${dsResult.content.slice(0, 300)}...`,
@@ -171,14 +152,13 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
     const devContext = buildDevContext(results, isApproval(ck2) ? '' : ck2)
     emit(ws, { type: 'pipeline_resumed', content: 'รับทราบค่ะ ส่งให้เปาเลย' })
 
-    // ─── Stage 3: Dev implement ────────────────────────────────────────────────
+    // ─── Stage 3: Dev ─────────────────────────────────────────────────────────
     move(ws, 'techlead', 'dev')
     thinking(ws, 'dev')
     const devResult = await withStatus(ws, 'dev', () => devProcess(devContext)) as Awaited<ReturnType<typeof devProcess>>
     results.dev = devResult.content
     message(ws, 'dev', 'qa', devResult.content)
 
-    // 🔔 Checkpoint 3 — user approve dev output before QA?
     const ck3 = await checkpoint(
       ws,
       `**เปา (Dev) ทำงานเสร็จแล้ว:**\n\n${devResult.content.slice(0, 400)}${devResult.content.length > 400 ? '...' : ''}`,
@@ -186,7 +166,6 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
     )
     if (ck3 === '__cancelled__') throw new PipelineCancelledError()
     if (!isApproval(ck3)) {
-      // ส่งกลับให้ dev แก้ก่อน
       emit(ws, { type: 'pipeline_resumed', content: 'รับทราบค่ะ ให้เปาแก้ก่อนนะคะ' })
       thinking(ws, 'dev')
       const devRevised = await devProcess(`${devContext}\n\nหัวหน้าขอแก้: ${ck3}\n\nงานเดิม:\n${devResult.content}`)
@@ -195,9 +174,9 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
     }
     emit(ws, { type: 'pipeline_resumed', content: 'รับทราบค่ะ ส่ง QA + Tester พร้อมกันเลย' })
 
-    // ─── Stage 4: QA + Tester (parallel) ─────────────────────────────────────
+    // ─── Stage 4: QA + Tester ─────────────────────────────────────────────────
     move(ws, 'dev', 'qa')
-    thinking(ws, 'qa', 'tester') // ทั้งสองทำงานพร้อมกัน
+    thinking(ws, 'qa', 'tester')
 
     const testCtx = `Code/Plan จาก Dev:\n${results.dev}\n\nOriginal requirements:\n${results.pm}`
     const qaResult = await withStatus(ws, 'qa', () => qaProcess(testCtx)) as Awaited<ReturnType<typeof qaProcess>>
@@ -207,7 +186,7 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
     message(ws, 'qa', 'secretary', qaResult.content)
     message(ws, 'tester', 'secretary', testerResult.content)
 
-    // ─── Final summary by ฟ้า ──────────────────────────────────────────────────
+    // ─── Final summary ────────────────────────────────────────────────────────
     thinking(ws, 'secretary')
     setStatusEmitter((msg) => emit(ws, { type: 'agent_status', agent: 'secretary', content: msg }))
     const allResults = Object.entries(results)
@@ -228,8 +207,6 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
     throw err
   }
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function isApproval(text: string): boolean {
   const t = text.trim().toLowerCase()
