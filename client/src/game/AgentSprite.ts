@@ -3,7 +3,7 @@ import Phaser from 'phaser'
 export interface AgentConfig {
   id: string
   name: string
-  color: number
+  textureKey: string
   x: number
   y: number
 }
@@ -11,7 +11,7 @@ export interface AgentConfig {
 export class AgentSprite {
   scene: Phaser.Scene
   config: AgentConfig
-  body: Phaser.GameObjects.Rectangle
+  sprite: Phaser.GameObjects.Sprite
   nameText: Phaser.GameObjects.Text
   homeX: number
   homeY: number
@@ -23,49 +23,42 @@ export class AgentSprite {
     this.homeX = config.x
     this.homeY = config.y
 
-    // Desk
-    scene.add.rectangle(config.x, config.y + 20, 48, 28, 0x4a4a6a)
+    this.sprite = scene.add.sprite(config.x, config.y, config.textureKey)
+      .setScale(1.5)
+      .setDepth(5)
 
-    // Character body
-    this.body = scene.add.rectangle(config.x, config.y - 8, 20, 24, config.color)
-      .setDepth(2)
-
-    // Name label
-    this.nameText = scene.add.text(config.x, config.y + 38, config.name, {
+    this.nameText = scene.add.text(config.x, config.y + 30, config.name, {
       fontSize: '10px',
-      color: '#e2e8f0',
-      backgroundColor: '#0f0f23aa',
+      color: '#ffffff',
+      backgroundColor: '#00000099',
       padding: { x: 4, y: 2 },
-    }).setOrigin(0.5).setDepth(3)
+    }).setOrigin(0.5).setDepth(6)
 
-    // Idle animation
-    scene.tweens.add({
-      targets: this.body,
-      scaleY: 0.95,
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+    this.sprite.play(`${config.textureKey}-idle`)
   }
 
   moveTo(targetX: number, targetY: number, onComplete?: () => void) {
     this.isMoving = true
+    const dx = targetX - this.sprite.x
+    const anim = dx > 0 ? `${this.config.textureKey}-walk-right` : `${this.config.textureKey}-walk-left`
+    this.sprite.play(anim)
+
     this.scene.tweens.add({
-      targets: this.body,
+      targets: this.sprite,
       x: targetX,
-      y: targetY - 8,
+      y: targetY,
       duration: 600,
       ease: 'Power2',
       onComplete: () => {
         this.isMoving = false
+        this.sprite.play(`${this.config.textureKey}-idle`)
         onComplete?.()
       },
     })
     this.scene.tweens.add({
       targets: this.nameText,
       x: targetX,
-      y: targetY + 38,
+      y: targetY + 30,
       duration: 600,
       ease: 'Power2',
     })
@@ -77,7 +70,7 @@ export class AgentSprite {
 
   flash() {
     this.scene.tweens.add({
-      targets: this.body,
+      targets: this.sprite,
       alpha: 0.3,
       duration: 200,
       yoyo: true,
