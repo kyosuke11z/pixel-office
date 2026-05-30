@@ -4,16 +4,8 @@ let demoMode = false
 export const isDemoMode = () => demoMode
 export const setDemoMode = (v: boolean) => { demoMode = v; return demoMode }
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
-export async function mockAgentCall<T>(agentId: string, realFn: () => Promise<T>): Promise<T> {
-  if (!demoMode) return realFn()
-  await sleep(1200 + Math.random() * 800)
-  return MOCK_RESPONSES[agentId] as T
-}
-
 export const MOCK_RESPONSES: Record<string, AgentDecision | AgentResponse | string> = {
-  secretary_decide: {
+  secretary: {
     thought: 'หัวหน้าต้องการให้ทีมทำงาน ส่งต่อให้ทีม',
     action: 'assign',
     taskMessage: 'ทีม: ช่วยดำเนินการตาม requirement ที่ได้รับ',
