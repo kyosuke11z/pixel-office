@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ProviderSettings } from './ProviderSettings'
 
 interface SessionMeta {
   id: string
@@ -17,6 +18,7 @@ interface Props {
 export function SessionSidebar({ currentSessionId, onSelectSession, onNewSession, onDeleteSession }: Props) {
   const [sessions, setSessions] = useState<SessionMeta[]>([])
   const [hoverId, setHoverId] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
 
   const refresh = () => {
     fetch('/api/sessions')
@@ -49,7 +51,13 @@ export function SessionSidebar({ currentSessionId, onSelectSession, onNewSession
       display: 'flex', flexDirection: 'column', fontSize: '11px', flexShrink: 0,
     }}>
       <div style={{ padding: '12px 10px 8px', borderBottom: '1px solid #1e293b' }}>
-        <div style={{ color: '#475569', fontSize: '10px', marginBottom: 8 }}>PIXEL OFFICE</div>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ color: '#475569', fontSize: '10px', flex: 1 }}>PIXEL OFFICE</span>
+          <button onClick={() => setShowSettings(true)} title="ตั้งค่า LLM Provider"
+            style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: '13px', padding: '0 2px' }}>
+            ⚙️
+          </button>
+        </div>
         <button onClick={onNewSession} style={{
           width: '100%', background: '#1e40af', color: '#fff', border: 'none',
           borderRadius: 6, padding: '6px 0', cursor: 'pointer', fontSize: '11px',
@@ -100,6 +108,8 @@ export function SessionSidebar({ currentSessionId, onSelectSession, onNewSession
           <div style={{ padding: 12, color: '#475569', textAlign: 'center' }}>ยังไม่มีประวัติ</div>
         )}
       </div>
+
+      {showSettings && <ProviderSettings onClose={() => setShowSettings(false)} />}
     </div>
   )
 }

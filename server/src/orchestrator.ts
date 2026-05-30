@@ -45,9 +45,15 @@ function thinking(ws: WebSocket, ...agents: AgentId[]) {
   agents.forEach(agent => emit(ws, { type: 'agent_thinking', agent }))
 }
 
-function withStatus(ws: WebSocket, agentId: AgentId, fn: () => Promise<unknown>) {
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+async function withStatus(ws: WebSocket, agentId: AgentId, fn: () => Promise<unknown>) {
   setStatusEmitter((msg) => emit(ws, { type: 'agent_status', agent: agentId, content: msg }))
-  return fn().finally(() => setStatusEmitter(null))
+  const result = await fn()
+  setStatusEmitter(null)
+  emit(ws, { type: 'agent_status', agent: agentId, content: 'เสร็จแล้ว ส่งต่อ...' })
+  await sleep(8_000) // cooldown ก่อน call ถัดไป
+  return result
 }
 
 function message(ws: WebSocket, from: AgentId, to: AgentId | 'user', content: string) {
