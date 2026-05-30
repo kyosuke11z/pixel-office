@@ -2,9 +2,13 @@
 import OpenAI from 'openai'
 import 'dotenv/config'
 
+if (!process.env.LLM_BASE_URL || !process.env.LLM_API_KEY) {
+  throw new Error('Missing required env vars: LLM_BASE_URL, LLM_API_KEY')
+}
+
 const client = new OpenAI({
-  baseURL: process.env.LLM_BASE_URL!,
-  apiKey: process.env.LLM_API_KEY!,
+  baseURL: process.env.LLM_BASE_URL,
+  apiKey: process.env.LLM_API_KEY,
 })
 
 const model = process.env.LLM_MODEL ?? 'moonshotai/kimi-k2.6'
@@ -25,7 +29,7 @@ export async function chat(
       ...history,
     ],
   })
-  return response.choices[0].message.content ?? ''
+  return response.choices[0]?.message.content ?? ''
 }
 
 export async function chatJSON<T>(
@@ -37,5 +41,9 @@ export async function chatJSON<T>(
     history
   )
   const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-  return JSON.parse(cleaned) as T
+  try {
+    return JSON.parse(cleaned) as T
+  } catch (error) {
+    throw new Error(`Invalid JSON response: ${cleaned}`, { cause: error })
+  }
 }
