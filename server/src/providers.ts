@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { clearClientCache } from './llm.js'
 
 const DATA_DIR = join(process.cwd(), 'data')
 const FILE = join(DATA_DIR, 'providers.json')
@@ -14,16 +15,22 @@ export interface Provider {
   isActive: boolean
 }
 
+let _cache: Provider[] | null = null
+
 function load(): Provider[] {
-  if (!existsSync(FILE)) return defaultProviders()
+  if (_cache) return _cache
+  if (!existsSync(FILE)) { _cache = defaultProviders(); return _cache }
   try {
-    return JSON.parse(readFileSync(FILE, 'utf8')) as Provider[]
+    _cache = JSON.parse(readFileSync(FILE, 'utf8')) as Provider[]
+    return _cache
   } catch {
-    return defaultProviders()
+    _cache = defaultProviders()
+    return _cache
   }
 }
 
 function save(providers: Provider[]) {
+  _cache = providers
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
   writeFileSync(FILE, JSON.stringify(providers, null, 2), 'utf8')
 }
@@ -89,6 +96,7 @@ export function activateProvider(id: string): Provider | null {
   if (!target) return null
   providers.forEach(p => { p.isActive = p.id === id })
   save(providers)
+  clearClientCache()
   return target
 }
 
@@ -97,11 +105,11 @@ export function deleteProvider(id: string): boolean {
   const idx = providers.findIndex(p => p.id === id)
   if (idx === -1) return false
   providers.splice(idx, 1)
-  // ถ้าลบตัวที่ active อยู่ ให้ activate ตัวแรกแทน
   if (providers.length > 0 && !providers.some(p => p.isActive)) {
     providers[0].isActive = true
   }
   save(providers)
+  clearClientCache()
   return true
 }
 
@@ -111,5 +119,6 @@ export function updateProvider(id: string, data: Partial<Omit<Provider, 'id' | '
   if (!p) return null
   Object.assign(p, data)
   save(providers)
+  clearClientCache()
   return p
 }
