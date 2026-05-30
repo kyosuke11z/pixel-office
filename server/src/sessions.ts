@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
+import { readFile, writeFile, unlink, readdir, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
@@ -19,16 +19,45 @@ export interface Session {
   messages: SessionMessage[]
 }
 
-function ensureDir() {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
+const _sessions = new Map<string, Session>()
+let _initialized = false
+
+async function ensureLoaded(): Promise<void> {
+  if (_initialized) return
+  _initialized = true
+  try {
+    const files = await readdir(DATA_DIR)
+    for (const f of files.filter(f => f.endsWith('.json'))) {
+      try {
+        const raw = await readFile(join(DATA_DIR, f), 'utf8')
+        const s: Session = JSON.parse(raw)
+        _sessions.set(s.id, s)
+      } catch { /* skip corrupted files */ }
+    }
+  } catch { /* DATA_DIR doesn't exist yet — start empty */ }
 }
 
 function sessionPath(id: string) {
   return join(DATA_DIR, `${id}.json`)
 }
 
-export function createSession(): Session {
-  ensureDir()
+async function writeToDisk(session: Session): Promise<void> {
+  try {
+    await mkdir(DATA_DIR, { recursive: true })
+    await writeFile(sessionPath(session.id), JSON.stringify(session, null, 2), 'utf8')
+  } catch (err) {
+    console.error('[sessions] write error:', err)
+  }
+}
+
+async function deleteDisk(id: string): Promise<void> {
+  try {
+    await unlink(sessionPath(id))
+  } catch { /* file may not exist on disk yet */ }
+}
+
+export async function createSession(): Promise<Session> {
+  await ensureLoaded()
   const now = new Date().toISOString()
   const session: Session = {
     id: randomUUID(),
@@ -37,42 +66,39 @@ export function createSession(): Session {
     updatedAt: now,
     messages: [],
   }
-  writeFileSync(sessionPath(session.id), JSON.stringify(session, null, 2), 'utf8')
+  _sessions.set(session.id, session)
+  void writeToDisk(session)
   return session
 }
 
-export function listSessions(): Omit<Session, 'messages'>[] {
-  ensureDir()
-  return readdirSync(DATA_DIR)
-    .filter(f => f.endsWith('.json'))
-    .map(f => {
-      const s: Session = JSON.parse(readFileSync(join(DATA_DIR, f), 'utf8'))
-      const { messages: _m, ...meta } = s
-      return meta
-    })
+export async function listSessions(): Promise<Omit<Session, 'messages'>[]> {
+  await ensureLoaded()
+  return [..._sessions.values()]
+    .map(({ messages: _m, ...meta }) => meta)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
-export function getSession(id: string): Session | null {
-  const p = sessionPath(id)
-  if (!existsSync(p)) return null
-  return JSON.parse(readFileSync(p, 'utf8'))
+export async function getSession(id: string): Promise<Session | null> {
+  await ensureLoaded()
+  return _sessions.get(id) ?? null
 }
 
-export function deleteSession(id: string): boolean {
-  const p = sessionPath(id)
-  if (!existsSync(p)) return false
-  unlinkSync(p)
+export async function deleteSession(id: string): Promise<boolean> {
+  await ensureLoaded()
+  if (!_sessions.has(id)) return false
+  _sessions.delete(id)
+  void deleteDisk(id)
   return true
 }
 
-export function appendMessage(id: string, msg: SessionMessage): void {
-  const session = getSession(id)
+export async function appendMessage(id: string, msg: SessionMessage): Promise<void> {
+  await ensureLoaded()
+  const session = _sessions.get(id)
   if (!session) return
   session.messages.push(msg)
   session.updatedAt = new Date().toISOString()
   if (session.title === 'แชทใหม่' && msg.role === 'user') {
     session.title = msg.content.slice(0, 40) + (msg.content.length > 40 ? '...' : '')
   }
-  writeFileSync(sessionPath(id), JSON.stringify(session, null, 2), 'utf8')
+  void writeToDisk(session)
 }

@@ -97,22 +97,22 @@ app.put('/api/project', (req, res) => {
 })
 
 // Sessions
-app.get('/api/sessions', (_req, res) => {
-  res.json(listSessions())
+app.get('/api/sessions', async (_req, res) => {
+  res.json(await listSessions())
 })
 
-app.post('/api/sessions', (_req, res) => {
-  res.json(createSession())
+app.post('/api/sessions', async (_req, res) => {
+  res.json(await createSession())
 })
 
-app.get('/api/sessions/:id', (req, res) => {
-  const session = getSession(req.params.id)
+app.get('/api/sessions/:id', async (req, res) => {
+  const session = await getSession(req.params.id)
   if (!session) { res.status(404).json({ error: 'ไม่พบ session' }); return }
   res.json(session)
 })
 
-app.delete('/api/sessions/:id', (req, res) => {
-  const ok = deleteSession(req.params.id)
+app.delete('/api/sessions/:id', async (req, res) => {
+  const ok = await deleteSession(req.params.id)
   if (!ok) { res.status(404).json({ error: 'ไม่พบ session' }); return }
   res.json({ ok: true })
 })
@@ -157,7 +157,6 @@ wss.on('connection', (ws) => {
     try {
       const parsed = JSON.parse(data.toString()) as { type?: string; content: string; sessionId?: string }
 
-      // handle cancel message ก่อน
       if (parsed.type === 'cancel') {
         cancelPipeline(ws)
         return
@@ -170,30 +169,26 @@ wss.on('connection', (ws) => {
         return
       }
 
-      // ถ้ามี checkpoint รอคำตอบ — route ไปที่นั้นก่อน
       if (resolveCheckpoint(ws, content)) return
 
-      // ตั้ง session
-      if (sessionId && getSession(sessionId)) {
+      if (sessionId && await getSession(sessionId)) {
         currentSessionId = sessionId
       }
       if (!currentSessionId) {
-        const newSession = createSession()
+        const newSession = await createSession()
         currentSessionId = newSession.id
         ws.send(JSON.stringify({ type: 'session_created', sessionId: currentSessionId }))
       }
 
-      // บันทึก user message
-      appendMessage(currentSessionId, {
+      await appendMessage(currentSessionId, {
         role: 'user',
         content,
         timestamp: new Date().toISOString(),
       })
 
-      // register hook เพื่อ auto-save secretary_reply (ใช้ ws จริง ไม่ใช่ patchedWs)
       const sid = currentSessionId
       registerReplyHook(ws, (replyContent) => {
-        appendMessage(sid, {
+        void appendMessage(sid, {
           role: 'assistant',
           content: replyContent,
           timestamp: new Date().toISOString(),
