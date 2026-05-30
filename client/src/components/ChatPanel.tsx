@@ -34,6 +34,7 @@ export default function ChatPanel({ messages, onSend, lastEvent, pendingCheckpoi
   const [input, setInput] = useState('')
   const [thinkingAgents, setThinkingAgents] = useState<Set<string>>(new Set())
   const [agentLog, setAgentLog] = useState<string[]>([])
+  const [agentStatus, setAgentStatus] = useState<Record<string, string>>({})
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -46,8 +47,13 @@ export default function ChatPanel({ messages, onSend, lastEvent, pendingCheckpoi
     if (lastEvent.type === 'agent_thinking') {
       const name = THINKING_MAP[lastEvent.agent ?? ''] ?? lastEvent.agent ?? ''
       setThinkingAgents(prev => new Set([...prev, name]))
+      setAgentStatus(prev => ({ ...prev, [name]: 'กำลังเตรียม...' }))
+    } else if (lastEvent.type === 'agent_status') {
+      const name = THINKING_MAP[lastEvent.agent ?? ''] ?? lastEvent.agent ?? ''
+      setAgentStatus(prev => ({ ...prev, [name]: lastEvent.content ?? '' }))
     } else if (lastEvent.type === 'secretary_reply') {
       setThinkingAgents(new Set())
+      setAgentStatus({})
     } else if (lastEvent.type === 'user_checkpoint') {
       setThinkingAgents(new Set())
     } else if (lastEvent.type === 'pipeline_resumed') {
@@ -132,10 +138,29 @@ export default function ChatPanel({ messages, onSend, lastEvent, pendingCheckpoi
         )}
 
         {thinkingList.length > 0 && (
-          <div style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>
-            {thinkingList.length === 1
-              ? `${thinkingList[0]} กำลังคิด...`
-              : `${thinkingList.join(' + ')} กำลังทำงานพร้อมกัน...`}
+          <div style={{
+            background: '#0f172a', border: '1px solid #1e293b',
+            borderRadius: 8, padding: '8px 10px', marginTop: 4,
+          }}>
+            {thinkingList.map(name => (
+              <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: isRateLimit(agentStatus[name]) ? '#f59e0b' : '#22d3ee',
+                  flexShrink: 0, animation: 'pulse 1.2s infinite',
+                }} />
+                <span style={{ color: AGENT_COLORS[name] ?? '#94a3b8', fontSize: 11, fontWeight: 'bold', minWidth: 28 }}>
+                  {name}
+                </span>
+                <span style={{
+                  fontSize: 10,
+                  color: isRateLimit(agentStatus[name]) ? '#f59e0b' : '#64748b',
+                  fontStyle: 'italic',
+                }}>
+                  {agentStatus[name] || 'กำลังทำงาน...'}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
@@ -202,6 +227,10 @@ export default function ChatPanel({ messages, onSend, lastEvent, pendingCheckpoi
       </div>
     </div>
   )
+}
+
+function isRateLimit(status?: string): boolean {
+  return !!(status && (status.includes('rate limit') || status.includes('รอ') || status.includes('retry')))
 }
 
 function btnStyle(bg: string): React.CSSProperties {

@@ -8,7 +8,7 @@ import { resolve, join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { handleUserMessage, resolveCheckpoint } from './orchestrator.js'
 import { setProjectRoot, getProjectRoot } from './project.js'
-import { createSession, listSessions, getSession, appendMessage } from './sessions.js'
+import { createSession, listSessions, getSession, appendMessage, deleteSession } from './sessions.js'
 
 const app = express()
 app.use(cors())
@@ -67,11 +67,14 @@ app.post('/api/sessions', (_req, res) => {
 
 app.get('/api/sessions/:id', (req, res) => {
   const session = getSession(req.params.id)
-  if (!session) {
-    res.status(404).json({ error: 'ไม่พบ session' })
-    return
-  }
+  if (!session) { res.status(404).json({ error: 'ไม่พบ session' }); return }
   res.json(session)
+})
+
+app.delete('/api/sessions/:id', (req, res) => {
+  const ok = deleteSession(req.params.id)
+  if (!ok) { res.status(404).json({ error: 'ไม่พบ session' }); return }
+  res.json({ ok: true })
 })
 
 const server = http.createServer(app)
