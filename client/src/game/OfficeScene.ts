@@ -25,15 +25,17 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   preload() {
-    // Character spritesheets (PIPOYA 32x32, 96x128 per file)
+    // Character spritesheets (PIPOYA 32x32, 96x128 per file = 3 cols × 4 rows)
     this.load.spritesheet('char-secretary', '/assets/characters/Female/Female 01-1.png', { frameWidth: 32, frameHeight: 32 })
     this.load.spritesheet('char-dev',       '/assets/characters/Male/Male 01-1.png',     { frameWidth: 32, frameHeight: 32 })
     this.load.spritesheet('char-qa',        '/assets/characters/Female/Female 02-1.png', { frameWidth: 32, frameHeight: 32 })
     this.load.spritesheet('char-tester',    '/assets/characters/Male/Male 02-1.png',     { frameWidth: 32, frameHeight: 32 })
 
-    // Tilesets
-    this.load.image('tileset-room',     '/assets/tileset/Interiors_free/32x32/Room_Builder_free_32x32.png')
-    this.load.image('tileset-interior', '/assets/tileset/Interiors_free/32x32/Interiors_free_32x32.png')
+    // Tilesets as spritesheets so individual frames are accessible
+    // Room_Builder: 544×736 = 17 tiles wide × 23 tiles tall
+    this.load.spritesheet('tileset-room', '/assets/tileset/Interiors_free/32x32/Room_Builder_free_32x32.png', { frameWidth: 32, frameHeight: 32 })
+    // Interiors: 512×2848 = 16 tiles wide × 89 tiles tall
+    this.load.spritesheet('tileset-interior', '/assets/tileset/Interiors_free/32x32/Interiors_free_32x32.png', { frameWidth: 32, frameHeight: 32 })
   }
 
   create() {
@@ -60,28 +62,31 @@ export class OfficeScene extends Phaser.Scene {
   private createRoom() {
     const W = this.scale.width
     const H = this.scale.height
-    const tilesW = Math.ceil(W / 32) + 1
-    const tilesH = Math.ceil(H / 32) + 1
+    const cx = W / 2
+    const cy = H / 2
 
-    const map = this.make.tilemap({ tileWidth: 32, tileHeight: 32, width: tilesW, height: tilesH })
-    const roomset = map.addTilesetImage('room', 'tileset-room')!
+    // Dark fallback background (always visible)
+    this.add.rectangle(cx, cy, W, H, 0x2c1f14).setDepth(0)
 
-    // Floor (tile index 1 = basic floor in Room_Builder_free)
-    const floorLayer = map.createBlankLayer('floor', roomset, 0, 0)!
-    floorLayer.fill(1)
+    // Floor: tileSprite tiles frame 34 (row 2, col 0 in 17-wide sheet = wood floor)
+    // Adjust FLOOR_FRAME if wrong tile shows up
+    const FLOOR_FRAME = 34
+    this.add.tileSprite(cx, cy, W - 64, H - 64, 'tileset-room', FLOOR_FRAME)
+      .setDepth(1)
 
-    // Top wall row
-    const wallLayer = map.createBlankLayer('walls', roomset, 0, 0)!
-    wallLayer.fill(0, 0, 0, tilesW, 1)          // top wall
-    wallLayer.fill(0, 0, tilesH - 1, tilesW, 1) // bottom wall
-    wallLayer.fill(0, 0, 0, 1, tilesH)          // left wall
-    wallLayer.fill(0, tilesW - 1, 0, 1, tilesH) // right wall
+    // Walls: tileSprite along each edge (frame 0 = top-left tile = outer wall piece)
+    const WALL_FRAME = 0
+    const WS = 32 // wall thickness
+    this.add.tileSprite(cx, WS / 2,     W, WS, 'tileset-room', WALL_FRAME).setDepth(2) // top
+    this.add.tileSprite(cx, H - WS / 2, W, WS, 'tileset-room', WALL_FRAME).setDepth(2) // bottom
+    this.add.tileSprite(WS / 2,     cy, WS, H, 'tileset-room', WALL_FRAME).setDepth(2) // left
+    this.add.tileSprite(W - WS / 2, cy, WS, H, 'tileset-room', WALL_FRAME).setDepth(2) // right
 
-    // Title bar overlay
-    this.add.rectangle(W / 2, 16, W, 32, 0x0f0f23, 0.85).setDepth(1)
-    this.add.text(W / 2, 16, '🏢 PIXEL OFFICE', {
+    // Title bar
+    this.add.rectangle(cx, 16, W, 32, 0x0a0a1a, 0.88).setDepth(3)
+    this.add.text(cx, 16, '🏢 PIXEL OFFICE', {
       fontSize: '11px', color: '#a78bfa', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(2)
+    }).setOrigin(0.5).setDepth(4)
   }
 
   private createFurniture() {
@@ -90,32 +95,29 @@ export class OfficeScene extends Phaser.Scene {
     const scaleX = W / 640
     const scaleY = H / 480
 
-    // Desk positions matching agent home positions
-    // Each desk = 2×1 tiles from interior tileset at known furniture row
-    // Using tile crops from Interiors_free_32x32.png
-    const deskPositions = [
-      { x: 320, y: 130 }, // ฟ้า desk
-      { x: 160, y: 265 }, // เปา desk
-      { x: 480, y: 265 }, // มิ้น desk
-      { x: 320, y: 385 }, // โบ้ท desk
+    // Interiors_free_32x32.png is 16 tiles wide
+    // frame = row * 16 + col
+    // Adjust DESK_* and CHAIR_* frame numbers to match actual tileset content
+    const DESK_L  = 64  // row 4, col 0  — left half of desk
+    const DESK_R  = 65  // row 4, col 1  — right half of desk
+    const CHAIR   = 80  // row 5, col 0  — chair
+
+    const positions = [
+      { x: 320, y: 130 }, // ฟ้า
+      { x: 160, y: 265 }, // เปา
+      { x: 480, y: 265 }, // มิ้น
+      { x: 320, y: 385 }, // โบ้ท
     ]
 
-    deskPositions.forEach(pos => {
+    positions.forEach(pos => {
       const dx = Math.round(pos.x * scaleX)
       const dy = Math.round(pos.y * scaleY)
 
-      // Desk top from interior tileset
-      // Tile row 8, col 0 in Interiors_free_32x32 = desk top (64×32 crop)
-      this.add.image(dx, dy, 'tileset-interior')
-        .setCrop(0, 256, 64, 32)
-        .setDepth(3)
-        .setOrigin(0.5)
-
-      // Chair below desk (32×32 crop)
-      this.add.image(dx, dy + 36, 'tileset-interior')
-        .setCrop(0, 288, 32, 32)
-        .setDepth(3)
-        .setOrigin(0.5)
+      // Desk: 2 tiles wide
+      this.add.image(dx - 16, dy, 'tileset-interior', DESK_L).setDepth(3)
+      this.add.image(dx + 16, dy, 'tileset-interior', DESK_R).setDepth(3)
+      // Chair below desk
+      this.add.image(dx, dy + 32, 'tileset-interior', CHAIR).setDepth(3)
     })
   }
 
