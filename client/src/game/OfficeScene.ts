@@ -37,16 +37,13 @@ export class OfficeScene extends Phaser.Scene {
     CHAR_KEYS.forEach(key => {
       this.load.spritesheet(key, CHAR_FILES[key], { frameWidth: 32, frameHeight: 32 })
     })
-    this.load.spritesheet(
-      'tileset-interior',
-      '/assets/tileset/Interiors_free/32x32/Interiors_free_32x32.png',
-      { frameWidth: 32, frameHeight: 32 }
-    )
+    // tileset-interior ไม่ใช้แล้ว — ใช้ Phaser Graphics แทน
   }
 
   create() {
     this.createAnimations()
     this.createRoom()
+    this.createFurniture()
     this.createAgents()
     this.bubble = new SpeechBubble(this)
   }
@@ -65,57 +62,103 @@ export class OfficeScene extends Phaser.Scene {
   private createRoom() {
     const W = this.scale.width
     const H = this.scale.height
-    const B = 24
+    const WALL = 28
 
-    // Wood floor — alternating planks
+    // ── พื้น ──────────────────────────────────────────────────────────────────
     const floor = this.add.graphics().setDepth(0)
-    const plankH = 32
-    for (let y = B; y < H - B; y += plankH) {
-      const even = Math.floor((y - B) / plankH) % 2 === 0
-      floor.fillStyle(even ? 0x7a5c3a : 0x6b4e2e, 1)
-      floor.fillRect(B, y, W - B * 2, Math.min(plankH, H - B - y))
+    const PLANK = 36
+    for (let y = WALL; y < H - WALL; y += PLANK) {
+      const even = Math.floor((y - WALL) / PLANK) % 2 === 0
+      floor.fillStyle(even ? 0x8a6640 : 0x7a5835, 1)
+      floor.fillRect(WALL, y, W - WALL * 2, Math.min(PLANK, H - WALL - y))
     }
-    floor.lineStyle(1, 0x5a3d21, 0.4)
-    for (let y = B + plankH; y < H - B; y += plankH) {
-      floor.lineBetween(B, y, W - B, y)
+    // เส้นแบ่ง plank
+    floor.lineStyle(1, 0x5c3d20, 0.35)
+    for (let y = WALL + PLANK; y < H - WALL; y += PLANK) {
+      floor.lineBetween(WALL, y, W - WALL, y)
+    }
+    // เส้นตาม (ทุก 80px)
+    for (let x = WALL + 80; x < W - WALL; x += 80) {
+      floor.lineBetween(x, WALL, x, H - WALL)
     }
 
-    // Walls
+    // ── กำแพง ────────────────────────────────────────────────────────────────
     const walls = this.add.graphics().setDepth(1)
-    walls.fillStyle(0x4a3520, 1)
-    walls.fillRect(0, 0, W, B)
-    walls.fillRect(0, H - B, W, B)
-    walls.fillRect(0, 0, B, H)
-    walls.fillRect(W - B, 0, B, H)
-    walls.fillStyle(0x8b6845, 1)
-    walls.fillRect(B, B - 4, W - B * 2, 4)
-    walls.fillStyle(0x3a2810, 1)
-    walls.fillRect(0, 0, B, B)
-    walls.fillRect(W - B, 0, B, B)
-    walls.fillRect(0, H - B, B, B)
-    walls.fillRect(W - B, H - B, B, B)
+    walls.fillStyle(0x2d1f0e, 1)
+    walls.fillRect(0, 0, W, WALL)         // บน
+    walls.fillRect(0, H - WALL, W, WALL)  // ล่าง
+    walls.fillRect(0, 0, WALL, H)         // ซ้าย
+    walls.fillRect(W - WALL, 0, WALL, H)  // ขวา
+    // highlight บนกำแพง
+    walls.fillStyle(0xb08050, 1)
+    walls.fillRect(WALL, WALL - 5, W - WALL * 2, 5)
+    // มุม
+    walls.fillStyle(0x1a0f05, 1)
+    for (const [x, y] of [[0,0],[W-WALL,0],[0,H-WALL],[W-WALL,H-WALL]] as [number,number][]) {
+      walls.fillRect(x, y, WALL, WALL)
+    }
 
-    // Zone dividers — แบ่ง management / engineering zone
-    const divider = this.add.graphics().setDepth(1)
-    divider.lineStyle(1, 0x5a3d21, 0.5)
-    divider.lineBetween(B + 10, 250, W - B - 10, 250)
+    // ── เส้นแบ่ง zone ────────────────────────────────────────────────────────
+    const divider = this.add.graphics().setDepth(2)
+    divider.lineStyle(1, 0x4a3020, 0.6)
+    divider.lineBetween(WALL + 20, 248, W - WALL - 20, 248)
 
     // Zone labels
     this.add.text(W / 2, 140, 'Management', {
-      fontSize: '8px', color: '#5a3d21', alpha: 0.6,
+      fontSize: '9px', color: '#6b4a2a',
     }).setOrigin(0.5).setDepth(2)
-    this.add.text(W / 2, 280, 'Engineering', {
-      fontSize: '8px', color: '#5a3d21', alpha: 0.6,
+    this.add.text(W / 2, 285, 'Engineering', {
+      fontSize: '9px', color: '#6b4a2a',
     }).setOrigin(0.5).setDepth(2)
+  }
 
-    // Desk sprites for each agent position
+  private createFurniture() {
+    const W = this.scale.width
+    const H = this.scale.height
     const scaleX = W / 640
     const scaleY = H / 480
-    const DESK = 130 // frame index — adjust if wrong
-    AGENT_CONFIGS.forEach(cfg => {
-      const dx = Math.round(cfg.x * scaleX)
-      const dy = Math.round(cfg.y * scaleY) + 20
-      this.add.image(dx, dy, 'tileset-interior', DESK).setDepth(2).setScale(0.9)
+
+    // positions ใน reference space 640x480:
+    const AGENT_POSITIONS = [
+      { id: 'secretary', x: 320, y: 75,  color: 0x4c1d95 }, // ม่วง
+      { id: 'pm',        x: 120, y: 185, color: 0x831843 }, // ชมพูเข้ม
+      { id: 'techlead',  x: 320, y: 185, color: 0x1e3a5f }, // น้ำเงินเข้ม
+      { id: 'designer',  x: 520, y: 185, color: 0x7f1d1d }, // แดงเข้ม
+      { id: 'dev',       x: 120, y: 320, color: 0x1e3a5f }, // น้ำเงิน
+      { id: 'qa',        x: 520, y: 320, color: 0x064e3b }, // เขียวเข้ม
+      { id: 'tester',    x: 320, y: 400, color: 0x7c2d12 }, // ส้มเข้ม
+    ]
+
+    const gfx = this.add.graphics().setDepth(2)
+
+    AGENT_POSITIONS.forEach(({ x, y, color }) => {
+      const dx = Math.round(x * scaleX)
+      const dy = Math.round(y * scaleY)
+      const dw = 72  // ความกว้างโต๊ะ
+      const dh = 20  // ความสูงโต๊ะ
+
+      // เงาโต๊ะ
+      gfx.fillStyle(0x000000, 0.25)
+      gfx.fillRoundedRect(dx - dw/2 + 2, dy + 14, dw, dh, 3)
+
+      // โต๊ะ
+      gfx.fillStyle(color, 0.85)
+      gfx.fillRoundedRect(dx - dw/2, dy + 12, dw, dh, 3)
+
+      // highlight บนโต๊ะ
+      gfx.fillStyle(0xffffff, 0.08)
+      gfx.fillRoundedRect(dx - dw/2 + 2, dy + 12, dw - 4, 4, 2)
+
+      // จอคอม (สี่เหลี่ยมเล็กบนโต๊ะ)
+      gfx.fillStyle(0x0f172a, 0.9)
+      gfx.fillRoundedRect(dx - 12, dy - 4, 24, 16, 2)
+      gfx.fillStyle(0x1d4ed8, 0.6)
+      gfx.fillRect(dx - 10, dy - 2, 20, 11)
+
+      // ขาโต๊ะ
+      gfx.fillStyle(color, 0.6)
+      gfx.fillRect(dx - dw/2 + 8, dy + 32, 4, 6)
+      gfx.fillRect(dx + dw/2 - 12, dy + 32, 4, 6)
     })
   }
 
