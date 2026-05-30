@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import type { WsEvent } from 'shared/types'
 
-export interface WsEvent {
-  type: string
-  agent?: string
-  from?: string
-  to?: string
-  content?: string
-}
+export type { WsEvent }
 
 export function useSocket(url: string) {
   const wsRef = useRef<WebSocket | null>(null)
@@ -14,21 +9,39 @@ export function useSocket(url: string) {
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
-    const ws = new WebSocket(url)
-    wsRef.current = ws
+    let retryDelay = 1_000
+    let destroyed = false
 
-    ws.onopen = () => setConnected(true)
-    ws.onclose = () => setConnected(false)
-    ws.onmessage = (e) => {
-      try {
-        const event = JSON.parse(e.data) as WsEvent
-        setLastEvent(event)
-      } catch {
-        // ignore malformed messages
+    function connect() {
+      if (destroyed) return
+      const ws = new WebSocket(url)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        retryDelay = 1_000
+        setConnected(true)
+      }
+      ws.onclose = () => {
+        setConnected(false)
+        if (!destroyed) {
+          setTimeout(connect, retryDelay)
+          retryDelay = Math.min(retryDelay * 2, 30_000)
+        }
+      }
+      ws.onmessage = (e) => {
+        try {
+          setLastEvent(JSON.parse(e.data) as WsEvent)
+        } catch {
+          // ignore malformed messages
+        }
       }
     }
 
-    return () => ws.close()
+    connect()
+    return () => {
+      destroyed = true
+      wsRef.current?.close()
+    }
   }, [url])
 
   const send = useCallback((data: object) => {

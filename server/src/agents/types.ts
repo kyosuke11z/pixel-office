@@ -1,11 +1,6 @@
-export type AgentId =
-  | 'secretary'
-  | 'pm'
-  | 'techlead'
-  | 'designer'
-  | 'dev'
-  | 'qa'
-  | 'tester'
+// server/src/agents/types.ts
+import type { AgentId } from '../shared/types.js'
+export type { AgentId, WsEventType, WsEvent } from '../shared/types.js'
 
 export interface AgentMessage {
   from: AgentId | 'user'
@@ -31,24 +26,4 @@ export interface AgentResponse {
     type: AgentMessage['type']
   }
   done?: boolean
-}
-
-export type WsEventType =
-  | 'agent_thinking'
-  | 'agent_status'
-  | 'agent_move'
-  | 'agent_message'
-  | 'secretary_reply'
-  | 'user_checkpoint'
-  | 'pipeline_resumed'
-  | 'pipeline_cancelled'
-  | 'error'
-
-export interface WsEvent {
-  type: WsEventType | string
-  agent?: AgentId
-  from?: AgentId | 'user'
-  to?: AgentId | 'user'
-  content?: string
-  sessionId?: string
 }
