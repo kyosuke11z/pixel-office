@@ -6,11 +6,13 @@ import http from 'http'
 import { readdirSync, existsSync } from 'node:fs'
 import { resolve, join, dirname } from 'node:path'
 import { homedir } from 'node:os'
-import { handleUserMessage, resolveCheckpoint } from './orchestrator.js'
+import { handleUserMessage, resolveCheckpoint, cancelPipeline } from './orchestrator.js'
 import { setProjectRoot, getProjectRoot } from './project.js'
 import { listProviders, addProvider, activateProvider, deleteProvider, updateProvider } from './providers.js'
 import { testProvider } from './llm.js'
 import { createSession, listSessions, getSession, appendMessage, deleteSession } from './sessions.js'
+import { isDemoMode, setDemoMode } from './demo.js'
+import { listFiles, readFile } from './tools/fileSystem.js'
 
 const app = express()
 app.use(cors())
@@ -115,6 +117,35 @@ app.delete('/api/sessions/:id', (req, res) => {
   res.json({ ok: true })
 })
 
+// Demo mode
+app.get('/api/demo', (_req, res) => res.json({ demo: isDemoMode() }))
+app.post('/api/demo', (req, res) => {
+  const { demo } = req.body as { demo?: boolean }
+  const current = demo !== undefined ? setDemoMode(demo) : setDemoMode(!isDemoMode())
+  res.json({ demo: current })
+})
+
+// File browser API
+app.get('/api/files', (_req, res) => {
+  try {
+    const files = listFiles('.', 3)
+    res.json(files)
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : String(e) })
+  }
+})
+
+app.get('/api/files/read', (req, res) => {
+  const path = req.query.path as string
+  if (!path) { res.status(400).json({ error: 'ต้องระบุ path' }); return }
+  try {
+    const content = readFile(path)
+    res.json({ content })
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : String(e) })
+  }
+})
+
 const server = http.createServer(app)
 const wss = new WebSocketServer({ server, path: '/ws' })
 
@@ -124,7 +155,14 @@ wss.on('connection', (ws) => {
 
   ws.on('message', async (data) => {
     try {
-      const parsed = JSON.parse(data.toString()) as { content: string; sessionId?: string }
+      const parsed = JSON.parse(data.toString()) as { type?: string; content: string; sessionId?: string }
+
+      // handle cancel message ก่อน
+      if (parsed.type === 'cancel') {
+        cancelPipeline(ws)
+        return
+      }
+
       const { content, sessionId } = parsed
 
       if (!content || typeof content !== 'string') {
