@@ -1,6 +1,11 @@
 import OpenAI from 'openai'
 import 'dotenv/config'
 import { getActiveProvider } from './providers.js'
+import {
+  RETRY_BASE_DELAY_MS,
+  RETRY_MAX_DELAY_MS,
+  MAX_RETRIES,
+} from './constants.js'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -14,27 +19,43 @@ function emitStatus(msg: string) { _statusFn?.(msg) }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+// ── Client cache ──────────────────────────────────────────────────────────────
+const _clientCache = new Map<string, { client: OpenAI; model: string }>()
+
+export function clearClientCache() {
+  _clientCache.clear()
+}
+
 function getClient(): { client: OpenAI; model: string } {
   const p = getActiveProvider()
   if (p?.apiKey) {
-    return {
-      client: new OpenAI({ baseURL: p.baseURL, apiKey: p.apiKey }),
-      model: p.model,
+    const key = `${p.baseURL}::${p.apiKey}::${p.model}`
+    let cached = _clientCache.get(key)
+    if (!cached) {
+      cached = { client: new OpenAI({ baseURL: p.baseURL, apiKey: p.apiKey }), model: p.model }
+      _clientCache.set(key, cached)
     }
+    return cached
   }
   // fallback to env
   const baseURL = process.env.LLM_BASE_URL
   const apiKey = process.env.LLM_API_KEY
   const model = process.env.LLM_MODEL ?? 'moonshotai/kimi-k2.6'
   if (!baseURL || !apiKey) throw new Error('ไม่มี LLM provider ที่พร้อมใช้งาน')
-  return { client: new OpenAI({ baseURL, apiKey }), model }
+  const key = `${baseURL}::${apiKey}::${model}`
+  let cached = _clientCache.get(key)
+  if (!cached) {
+    cached = { client: new OpenAI({ baseURL, apiKey }), model }
+    _clientCache.set(key, cached)
+  }
+  return cached
 }
 
 async function chatWithRetry(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
-  maxRetries = 5
+  maxRetries = MAX_RETRIES
 ): Promise<string> {
-  let delay = 15_000
+  let delay = RETRY_BASE_DELAY_MS
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -60,7 +81,7 @@ async function chatWithRetry(
           : `มีปัญหานิดหน่อย ลองใหม่อีกทีนะ...`
         )
         await sleep(delay)
-        delay = Math.min(delay * 1.5, 120_000)
+        delay = Math.min(delay * 1.5, RETRY_MAX_DELAY_MS)
         continue
       }
       throw err
@@ -83,7 +104,6 @@ export async function chatJSON<T>(systemPrompt: string, history: ChatMessage[]):
   }
 }
 
-// ทดสอบ connection
 export async function testProvider(baseURL: string, apiKey: string, model: string): Promise<string> {
   const client = new OpenAI({ baseURL, apiKey })
   const res = await client.chat.completions.create({
