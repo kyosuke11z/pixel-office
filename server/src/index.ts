@@ -6,7 +6,7 @@ import http from 'http'
 import { readdirSync, existsSync } from 'node:fs'
 import { resolve, join, dirname } from 'node:path'
 import { homedir } from 'node:os'
-import { handleUserMessage, resolveCheckpoint, cancelPipeline } from './orchestrator.js'
+import { handleUserMessage, resolveCheckpoint, cancelPipeline, registerReplyHook, unregisterReplyHook } from './orchestrator.js'
 import { setProjectRoot, getProjectRoot } from './project.js'
 import { listProviders, addProvider, activateProvider, deleteProvider, updateProvider } from './providers.js'
 import { testProvider } from './llm.js'
@@ -190,25 +190,21 @@ wss.on('connection', (ws) => {
         timestamp: new Date().toISOString(),
       })
 
-      // intercept send เพื่อ auto-save secretary_reply
+      // register hook เพื่อ auto-save secretary_reply (ใช้ ws จริง ไม่ใช่ patchedWs)
       const sid = currentSessionId
-      const origSend = ws.send.bind(ws)
-      const patchedWs = Object.create(ws) as typeof ws
-      patchedWs.send = (eventData: string) => {
-        origSend(eventData)
-        try {
-          const evt = JSON.parse(eventData) as { type: string; content?: string }
-          if (evt.type === 'secretary_reply' && evt.content) {
-            appendMessage(sid, {
-              role: 'assistant',
-              content: evt.content,
-              timestamp: new Date().toISOString(),
-            })
-          }
-        } catch { /* ignore */ }
-      }
+      registerReplyHook(ws, (replyContent) => {
+        appendMessage(sid, {
+          role: 'assistant',
+          content: replyContent,
+          timestamp: new Date().toISOString(),
+        })
+      })
 
-      await handleUserMessage(content, patchedWs)
+      try {
+        await handleUserMessage(content, ws)
+      } finally {
+        unregisterReplyHook(ws)
+      }
     } catch (err) {
       ws.send(JSON.stringify({ type: 'error', content: String(err) }))
     }

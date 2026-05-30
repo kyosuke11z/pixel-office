@@ -30,7 +30,7 @@ function checkCancelled(ws: WebSocket) {
   }
 }
 
-// Checkpoint resolver — per WS connection
+// Checkpoint resolver — per WS connection (keyed by original ws)
 const checkpointResolvers: Map<WebSocket, (answer: string) => void> = new Map()
 
 export function resolveCheckpoint(ws: WebSocket, answer: string): boolean {
@@ -41,9 +41,17 @@ export function resolveCheckpoint(ws: WebSocket, answer: string): boolean {
   return true
 }
 
+// Reply hook — auto-save secretary_reply to session without patchedWs
+const replyHooks: Map<WebSocket, (content: string) => void> = new Map()
+export function registerReplyHook(ws: WebSocket, fn: (content: string) => void) { replyHooks.set(ws, fn) }
+export function unregisterReplyHook(ws: WebSocket) { replyHooks.delete(ws) }
+
 function emit(ws: WebSocket, event: WsEvent) {
   if (ws.readyState === ws.OPEN) {
     ws.send(JSON.stringify(event))
+    if (event.type === 'secretary_reply' && event.content) {
+      replyHooks.get(ws)?.(event.content)
+    }
   }
 }
 
