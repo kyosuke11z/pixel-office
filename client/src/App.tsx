@@ -38,7 +38,8 @@ export default function App() {
   const [demoMode, setDemoMode] = useState(false)
   const [showFiles, setShowFiles] = useState(false)
 
-  const { send, lastEvent } = useSocket('ws://localhost:3001/ws')
+  const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname}:3001/ws`
+  const { send, lastEvent } = useSocket(WS_URL)
   const { agentStates, handleAgentEvent } = useAgentStates()
 
   useEffect(() => {
