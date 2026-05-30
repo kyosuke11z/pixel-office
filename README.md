@@ -2,8 +2,6 @@
 
 ![Pixel Office Screenshot](screenshot.png)
 
-![Pixel Office Demo](demo.gif)
-
 จำลองออฟฟิศ pixel art (top-down view) ที่ AI agent **7 ตัว** ทำงานร่วมกัน  
 คุยกับเลขา **ฟ้า** ด้วยภาษาธรรมดา — เธอแปลเป็น spec แล้ว orchestrate ทีมเอง  
 **User คือหัวหน้า** — มี checkpoint ให้ approve งานทุกขั้นตอนสำคัญ
