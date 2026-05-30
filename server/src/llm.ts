@@ -17,24 +17,34 @@ export interface ChatMessage {
   content: string
 }
 
+// Status emitter — orchestrator ตั้งค่าก่อนเรียกแต่ละ agent
+let _statusFn: ((msg: string) => void) | null = null
+export function setStatusEmitter(fn: ((msg: string) => void) | null) {
+  _statusFn = fn
+}
+function emitStatus(msg: string) {
+  _statusFn?.(msg)
+}
+
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 async function chatWithRetry(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   maxRetries = 5
 ): Promise<string> {
-  let delay = 15_000 // เริ่มที่ 15 วินาทีเมื่อโดน rate limit
+  let delay = 15_000
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      emitStatus(attempt === 0 ? 'กำลังคิด...' : `retry ครั้งที่ ${attempt} — กำลังคิด...`)
       const response = await client.chat.completions.create({ model, messages })
       const content = response.choices[0]?.message.content
-      // บางครั้ง Kimi ส่ง content = null กลับมา ให้ retry
       if (!content) {
-        console.warn(`[llm] attempt ${attempt + 1}: empty content, retrying...`)
+        emitStatus('ได้รับ response ว่างเปล่า รอ 5s แล้วลองใหม่...')
         await sleep(5_000)
         continue
       }
+      emitStatus('ได้คำตอบแล้ว ✓')
       return content
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -42,9 +52,13 @@ async function chatWithRetry(
       const is5xx = msg.includes('500') || msg.includes('502') || msg.includes('503')
 
       if ((is429 || is5xx) && attempt < maxRetries) {
-        console.warn(`[llm] attempt ${attempt + 1} failed (${is429 ? 'rate limit' : 'server error'}), waiting ${delay / 1000}s...`)
+        const waitSec = Math.round(delay / 1000)
+        emitStatus(is429
+          ? `โดน rate limit — รอ ${waitSec}s แล้ว retry...`
+          : `server error — รอ ${waitSec}s แล้ว retry...`
+        )
         await sleep(delay)
-        delay = Math.min(delay * 1.5, 120_000) // exponential backoff สูงสุด 2 นาที
+        delay = Math.min(delay * 1.5, 120_000)
         continue
       }
       throw err

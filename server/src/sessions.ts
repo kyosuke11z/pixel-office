@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
@@ -57,6 +57,13 @@ export function getSession(id: string): Session | null {
   const p = sessionPath(id)
   if (!existsSync(p)) return null
   return JSON.parse(readFileSync(p, 'utf8'))
+}
+
+export function deleteSession(id: string): boolean {
+  const p = sessionPath(id)
+  if (!existsSync(p)) return false
+  unlinkSync(p)
+  return true
 }
 
 export function appendMessage(id: string, msg: SessionMessage): void {

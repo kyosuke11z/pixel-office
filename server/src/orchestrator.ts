@@ -1,5 +1,6 @@
 import type WebSocket from 'ws'
 import type { AgentId, WsEvent } from './agents/types.js'
+import { setStatusEmitter } from './llm.js'
 import { secretaryDecide, secretarySummarize } from './agents/secretary.js'
 import { pmProcess } from './agents/pm.js'
 import { techLeadProcess } from './agents/techlead.js'
@@ -44,6 +45,11 @@ function thinking(ws: WebSocket, ...agents: AgentId[]) {
   agents.forEach(agent => emit(ws, { type: 'agent_thinking', agent }))
 }
 
+function withStatus(ws: WebSocket, agentId: AgentId, fn: () => Promise<unknown>) {
+  setStatusEmitter((msg) => emit(ws, { type: 'agent_status', agent: agentId, content: msg }))
+  return fn().finally(() => setStatusEmitter(null))
+}
+
 function message(ws: WebSocket, from: AgentId, to: AgentId | 'user', content: string) {
   emit(ws, { type: 'agent_message', from, to, content: content.slice(0, 200) })
 }
@@ -55,7 +61,7 @@ function move(ws: WebSocket, from: AgentId, to: AgentId) {
 export async function handleUserMessage(userMessage: string, ws: WebSocket) {
   // ฟ้า ตัดสินใจ: คุยเล่น หรือ งานจริง
   thinking(ws, 'secretary')
-  const decision = await secretaryDecide(userMessage)
+  const decision = await withStatus(ws, 'secretary', () => secretaryDecide(userMessage)) as Awaited<ReturnType<typeof secretaryDecide>>
 
   if (decision.action === 'reply_user') {
     emit(ws, { type: 'secretary_reply', content: decision.replyContent })
@@ -68,7 +74,7 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
   // ─── Stage 1: PM วิเคราะห์ requirement ───────────────────────────────────
   move(ws, 'secretary', 'pm')
   thinking(ws, 'pm')
-  const pmResult = await pmProcess(originalTask)
+  const pmResult = await withStatus(ws, 'pm', () => pmProcess(originalTask)) as Awaited<ReturnType<typeof pmProcess>>
   results.pm = pmResult.content
   message(ws, 'pm', 'secretary', pmResult.content)
 
@@ -86,8 +92,9 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
   thinking(ws, 'techlead', 'designer') // ทั้งสองทำงานพร้อมกัน
 
   // emit thinking พร้อมกันก่อน แต่รัน sequential เพื่อหลีกเลี่ยง rate limit
-  const tlResult = await techLeadProcess(`Requirements:\n${results.pm}\n\nTask: ${refinedTask}`)
-  const dsResult = await designerProcess(`Requirements:\n${results.pm}\n\nTask: ${refinedTask}`)
+  const ctx = `Requirements:\n${results.pm}\n\nTask: ${refinedTask}`
+  const tlResult = await withStatus(ws, 'techlead', () => techLeadProcess(ctx)) as Awaited<ReturnType<typeof techLeadProcess>>
+  const dsResult = await withStatus(ws, 'designer', () => designerProcess(ctx)) as Awaited<ReturnType<typeof designerProcess>>
   results.techlead = tlResult.content
   results.designer = dsResult.content
   message(ws, 'techlead', 'dev', tlResult.content)
@@ -109,7 +116,7 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
   // ─── Stage 3: Dev implement ────────────────────────────────────────────────
   move(ws, 'techlead', 'dev')
   thinking(ws, 'dev')
-  const devResult = await devProcess(devContext)
+  const devResult = await withStatus(ws, 'dev', () => devProcess(devContext)) as Awaited<ReturnType<typeof devProcess>>
   results.dev = devResult.content
   message(ws, 'dev', 'qa', devResult.content)
 
@@ -133,8 +140,9 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
   move(ws, 'dev', 'qa')
   thinking(ws, 'qa', 'tester') // ทั้งสองทำงานพร้อมกัน
 
-  const qaResult = await qaProcess(`Code/Plan จาก Dev:\n${results.dev}\n\nOriginal requirements:\n${results.pm}`)
-  const testerResult = await testerProcess(`Code/Plan จาก Dev:\n${results.dev}\n\nOriginal requirements:\n${results.pm}`)
+  const testCtx = `Code/Plan จาก Dev:\n${results.dev}\n\nOriginal requirements:\n${results.pm}`
+  const qaResult = await withStatus(ws, 'qa', () => qaProcess(testCtx)) as Awaited<ReturnType<typeof qaProcess>>
+  const testerResult = await withStatus(ws, 'tester', () => testerProcess(testCtx)) as Awaited<ReturnType<typeof testerProcess>>
   results.qa = qaResult.content
   results.tester = testerResult.content
   message(ws, 'qa', 'secretary', qaResult.content)
@@ -142,6 +150,7 @@ export async function handleUserMessage(userMessage: string, ws: WebSocket) {
 
   // ─── Final summary by ฟ้า ──────────────────────────────────────────────────
   thinking(ws, 'secretary')
+  setStatusEmitter((msg) => emit(ws, { type: 'agent_status', agent: 'secretary', content: msg }))
   const allResults = Object.entries(results)
     .map(([k, v]) => `### ${k.toUpperCase()}\n${v}`)
     .join('\n\n---\n\n')

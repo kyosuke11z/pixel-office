@@ -35,6 +35,7 @@ export interface AgentResponse {
 
 export type WsEventType =
   | 'agent_thinking'
+  | 'agent_status'
   | 'agent_move'
   | 'agent_message'
   | 'secretary_reply'

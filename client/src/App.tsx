@@ -116,6 +116,7 @@ export default function App() {
         currentSessionId={currentSessionId}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
+        onDeleteSession={handleNewSession}
       />
       <div ref={gameRef} style={{ flex: 1, background: '#0f0f1e' }} />
       <div style={{ width: 360, display: 'flex', flexDirection: 'column' }}>
