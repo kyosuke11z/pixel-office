@@ -1,13 +1,22 @@
 # Pixel Office — Multi-Agent AI Simulation
 
-จำลองออฟฟิศ pixel art (top-down view) ที่ AI agent 4 ตัวทำงานร่วมกัน  
-คุยกับเลขา **ฟ้า** ด้วยภาษาธรรมดา — เธอจะแปลงเป็น task และ orchestrate ทีมเอง
+![Pixel Office Demo](demo.gif)
+
+จำลองออฟฟิศ pixel art (top-down view) ที่ AI agent **7 ตัว** ทำงานร่วมกัน  
+คุยกับเลขา **ฟ้า** ด้วยภาษาธรรมดา — เธอแปลเป็น spec แล้ว orchestrate ทีมเอง  
+**User คือหัวหน้า** — มี checkpoint ให้ approve งานทุกขั้นตอนสำคัญ
 
 ## ทีมงาน
 
-| ตัวละคร | บทบาท | หน้าที่ |
-|---------|-------|---------|
-| ฟ้า 🟣 | Secretary | รับ request, แปลภาษา, orchestrate ทีม |
+| ตัวละคร | บทบาท | นิสัย |
+|---------|-------|-------|
+| ฟ้า | Secretary | สุภาพ เป็นกันเอง ใช้ "ค่ะ" เสมอ |
+| อิง | Product Manager | จู้จี้ requirement ชอบ acceptance criteria |
+| ต้น | Tech Lead | ตรงๆ สั้น ชอบ YAGNI |
+| แนน | UI/UX Designer | กระตือรือร้น ชอบเสนอ dark mode |
+| เปา | Developer | เงียบขรึม ตอบสั้น "โอเค / เดี๋ยวทำ" |
+| มิ้น | QA Engineer | หา edge case ไม่ sign-off ถ้ายัง TODO |
+| โบ้ท | Tester | รายงาน ✅❌ สั้นๆ ถ้า fail จะ list ยาวมาก |
 | เปา 🔵 | Dev | เขียนโค้ด, วาง architecture |
 | มิ้น 🟢 | QA | review, หา bug, เขียน test plan |
 | โบ้ท 🟠 | Tester | รัน test, รายงานผล |
