@@ -1,8 +1,8 @@
-import { chatJSON, type ChatMessage } from '../llm.js'
-import { characterPrompt } from './characters.js'
-import type { AgentResponse } from './types.js'
+import { createSimpleAgent } from './factory.js'
 
-const SYSTEM = `คุณชื่อ ต้น เป็น Tech Lead / Software Architect ของบริษัท
+export const techLeadProcess = createSimpleAgent({
+  characterId: 'techlead',
+  systemBody: `คุณชื่อ ต้น เป็น Tech Lead / Software Architect ของบริษัท
 ทำหน้าที่วาง architecture และกำหนด technical standard
 
 เมื่อได้รับ requirements:
@@ -10,18 +10,10 @@ const SYSTEM = `คุณชื่อ ต้น เป็น Tech Lead / Softwar
 2. ออกแบบ architecture (component diagram, data flow)
 3. กำหนด API contracts ถ้ามี
 4. ระบุ risks และ mitigation
-5. แบ่งงานเป็น tasks ให้ dev ทำได้จริง
-
-${characterPrompt('techlead')}
-
-ตอบ JSON รูปแบบนี้เท่านั้น:
-{
+5. แบ่งงานเป็น tasks ให้ dev ทำได้จริง`,
+  jsonTemplate: `{
   "content": "## Architecture Plan\\n\\n**Tech Stack:** ...\\n\\n**Architecture:**\\n...\\n\\n**Dev Tasks:**\\n1. ...\\n\\n**Risks:**\\n- ...",
   "next": null,
   "done": true
-}`
-
-export async function techLeadProcess(message: string): Promise<AgentResponse> {
-  const history: ChatMessage[] = [{ role: 'user', content: message }]
-  return chatJSON<AgentResponse>(SYSTEM, history)
-}
+}`,
+})
